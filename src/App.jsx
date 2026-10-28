@@ -3,7 +3,7 @@ import {
   Home, Search, Heart, User, PlusCircle, MapPin, 
   Car, Smartphone, Laptop, Home as HomeIcon, Briefcase, 
   ArrowLeft, Phone, MessageCircle, Trash2, X, Navigation, RefreshCw, Clock,
-  Eye, Tag, QrCode, ShieldCheck, Bell, CheckCircle2, AlertCircle
+  Eye, Tag, QrCode, ShieldCheck, Bell, CheckCircle2, AlertCircle, Send, Camera
 } from 'lucide-react';
 
 function AppLogo({ size = "md" }) {
@@ -65,15 +65,21 @@ export default function App() {
   const [isLocating, setIsLocating] = useState(false);
   const [locationModal, setLocationModal] = useState(false);
 
-  // --- MODALS & NOTIFICATION STATES ---
-  const [paymentModal, setPaymentModal] = useState(null); // ad object to renew
-  const [offerModal, setOfferModal] = useState(null); // ad object to offer
+  // --- MODALS & CHAT STATES ---
+  const [paymentModal, setPaymentModal] = useState(null);
+  const [offerModal, setOfferModal] = useState(null);
   const [offeredPrice, setOfferedPrice] = useState('');
   const [txnId, setTxnId] = useState('');
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: 'Welcome to HNC Hub!', body: 'Post ads for free with 3 days validity.', time: 'Just now', read: false }
+  
+  const [chatMessages, setChatMessages] = useState([
+    { id: 1, sender: 'seller', text: 'Hello! Is this item still available?', time: '10:30 AM' }
   ]);
-  const [adminRequests, setAdminRequests] = useState([]); // Pending payment approvals
+  const [newMessage, setNewMessage] = useState('');
+
+  const [notifications, setNotifications] = useState([
+    { id: 1, title: 'Welcome to HNC Hub!', body: 'UI alignment fixed for bottom navigation.', time: 'Just now', read: false }
+  ]);
+  const [adminRequests, setAdminRequests] = useState([]);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('hnc_user');
@@ -151,10 +157,11 @@ export default function App() {
   };
 
   // --- APP NAVIGATION & ADS STATE ---
-  const [currentScreen, setCurrentScreen] = useState('home'); // home, detail, sell, profile, notifications, admin
+  const [currentScreen, setCurrentScreen] = useState('home');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   const [ads, setAds] = useState([
     {
@@ -165,10 +172,13 @@ export default function App() {
       location: 'Malviya Nagar, Jaipur',
       expiryTime: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
       views: 42,
-      image: 'https://images.unsplash.com/photo-1590362891991-f776e747a588?auto=format&fit=crop&w=600&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1590362891991-f776e747a588?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1553440569-bcc63803a83d?auto=format&fit=crop&w=600&q=80'
+      ],
       description: 'Well maintained family car, first owner, insurance valid till end of year.',
       seller: 'Rahul K.',
-      sellerPhone: '+91 9876543210',
+      sellerPhone: '+919876543210',
       sellerJoined: '2021'
     },
     {
@@ -177,12 +187,14 @@ export default function App() {
       price: '48000',
       category: 'Mobiles',
       location: 'Vaishali Nagar, Jaipur',
-      expiryTime: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // Expiring soon for test
+      expiryTime: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       views: 128,
-      image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80'
+      ],
       description: 'Selling my well-maintained iPhone in mint condition. Includes original box and fast charger.',
       seller: 'Amit S.',
-      sellerPhone: '+91 9123456789',
+      sellerPhone: '+919123456789',
       sellerJoined: '2022'
     }
   ]);
@@ -195,7 +207,7 @@ export default function App() {
     category: 'Mobiles',
     location: currentLocation,
     description: '',
-    image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80'
+    images: []
   });
 
   const categories = [
@@ -215,43 +227,90 @@ export default function App() {
     }
   };
 
-  // Increment view counter when opening ad detail
   const openAdDetail = (ad) => {
     const updatedAds = ads.map(item => item.id === ad.id ? { ...item, views: item.views + 1 } : item);
     setAds(updatedAds);
     setSelectedProduct({ ...ad, views: ad.views + 1 });
+    setActiveImageIndex(0);
     setCurrentScreen('detail');
+  };
+
+  const handleImageUpload = (e) => {
+    const files = Array.from(e.target.files);
+    if (newAd.images.length + files.length > 5) {
+      alert('You can upload a maximum of 5 images.');
+      return;
+    }
+
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewAd(prev => ({
+          ...prev,
+          images: [...prev.images, reader.result]
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleRemoveImage = (index) => {
+    setNewAd(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
   };
 
   const handlePublishAd = (e) => {
     e.preventDefault();
     if (!newAd.title || !newAd.price) return;
     
+    const finalImages = newAd.images.length > 0 ? newAd.images : ['https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80'];
     const threeDaysLater = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
 
     const createdAd = {
       id: Date.now(),
-      ...newAd,
+      title: newAd.title,
+      price: newAd.price,
+      category: newAd.category,
       location: currentLocation,
       expiryTime: threeDaysLater,
       views: 1,
+      images: finalImages,
+      description: newAd.description || newAd.title,
       seller: user ? user.name : 'Guest User',
-      sellerPhone: user ? user.phone : '+91 9876543210',
+      sellerPhone: user ? user.phone.replace(/\s+/g, '') : '+919876543210',
       sellerJoined: '2026'
     };
 
     setAds([createdAd, ...ads]);
     setCurrentScreen('home');
-    setNewAd({ title: '', price: '', category: 'Mobiles', location: currentLocation, description: '', image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80' });
+    setNewAd({ title: '', price: '', category: 'Mobiles', location: currentLocation, description: '', images: [] });
   };
 
-  // Submit Payment Request to Admin
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+
+    const userMsg = { id: Date.now(), sender: 'buyer', text: newMessage.trim(), time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+    setChatMessages([...chatMessages, userMsg]);
+    setNewMessage('');
+
+    setNotifications([
+      {
+        id: Date.now(),
+        title: `New Message from ${user.name}`,
+        body: `"${userMsg.text}" regarding your ad "${selectedProduct.title}"`,
+        time: 'Just now',
+        read: false
+      },
+      ...notifications
+    ]);
+  };
+
   const handlePaymentSubmit = (e) => {
     e.preventDefault();
-    if (!txnId.trim()) {
-      alert('Please enter Paytm Transaction ID / UTR number.');
-      return;
-    }
+    if (!txnId.trim()) { alert('Please enter Paytm Transaction ID / UTR number.'); return; }
 
     const newRequest = {
       id: Date.now(),
@@ -270,19 +329,14 @@ export default function App() {
     setTxnId('');
   };
 
-  // Admin approves payment -> extends ad by 7 days & notifies user
   const handleAdminApprove = (reqId) => {
     const req = adminRequests.find(r => r.id === reqId);
     if (!req) return;
 
-    // Extend ad by 7 days (1 week)
     const newExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     setAds(ads.map(ad => ad.id === req.adId ? { ...ad, expiryTime: newExpiry } : ad));
-
-    // Update Request status
     setAdminRequests(adminRequests.map(r => r.id === reqId ? { ...r, status: 'approved' } : r));
 
-    // Send Notification to User
     setNotifications([
       {
         id: Date.now(),
@@ -295,13 +349,9 @@ export default function App() {
     ]);
   };
 
-  // Buyer sends custom price offer
   const handleSendOffer = (e) => {
     e.preventDefault();
-    if (!offeredPrice || Number(offeredPrice) <= 0) {
-      alert('Please enter a valid offer amount.');
-      return;
-    }
+    if (!offeredPrice || Number(offeredPrice) <= 0) { alert('Please enter a valid offer amount.'); return; }
 
     setNotifications([
       {
@@ -443,7 +493,6 @@ export default function App() {
                 <AppLogo size="sm" />
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {/* Notification Icon */}
                   <button 
                     onClick={() => setCurrentScreen('notifications')}
                     style={{ position: 'relative', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '6px', borderRadius: '50%', cursor: 'pointer' }}
@@ -454,7 +503,6 @@ export default function App() {
                     )}
                   </button>
 
-                  {/* Location Badge */}
                   <button 
                     onClick={() => setLocationModal(true)}
                     style={{ display: 'flex', alignItems: 'center', fontSize: '11px', backgroundColor: '#ffedd5', color: '#f97316', padding: '6px 10px', borderRadius: '20px', fontWeight: '700', gap: '4px', border: 'none', cursor: 'pointer' }}
@@ -477,8 +525,7 @@ export default function App() {
               </div>
             </header>
 
-            <main style={{ padding: '16px', flex: 1, overflowY: 'auto', paddingBottom: '80px' }}>
-              {/* Category Filter */}
+            <main style={{ padding: '16px', flex: 1, overflowY: 'auto', paddingBottom: '90px' }}>
               <div style={{ marginBottom: '16px', display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }}>
                 {categories.map((cat, idx) => {
                   const IconComp = cat.icon;
@@ -496,11 +543,11 @@ export default function App() {
                 })}
               </div>
 
-              {/* Feed Grid */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 {filteredAds.map((ad) => {
                   const timeRemaining = getTimeRemaining(ad.expiryTime);
                   const isExpired = timeRemaining === 'Expired';
+                  const coverImage = ad.images && ad.images.length > 0 ? ad.images[0] : 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80';
 
                   return (
                     <div 
@@ -509,15 +556,13 @@ export default function App() {
                       style={{ backgroundColor: '#ffffff', borderRadius: '16px', overflow: 'hidden', border: '1px solid #ffedd5', cursor: 'pointer', display: 'flex', flexDirection: 'column', opacity: isExpired ? 0.65 : 1 }}
                     >
                       <div style={{ position: 'relative', height: '130px', backgroundColor: '#e2e8f0' }}>
-                        <img src={ad.image} alt={ad.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img src={coverImage} alt={ad.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         
-                        {/* Expiry Badge */}
                         <div style={{ position: 'absolute', bottom: '6px', left: '6px', backgroundColor: isExpired ? '#ef4444' : 'rgba(15, 23, 42, 0.85)', color: '#ffffff', fontSize: '9px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '3px' }}>
                           <Clock size={10} />
                           <span>{timeRemaining}</span>
                         </div>
 
-                        {/* View Counter */}
                         <div style={{ position: 'absolute', top: '8px', left: '8px', backgroundColor: 'rgba(0,0,0,0.6)', color: '#ffffff', fontSize: '9px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '3px' }}>
                           <Eye size={10} />
                           <span>{ad.views}</span>
@@ -537,7 +582,6 @@ export default function App() {
                           <p style={{ fontSize: '11px', fontWeight: '600', color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ad.title}</p>
                         </div>
 
-                        {/* Renew Option if Expired */}
                         {isExpired && (
                           <button 
                             onClick={(e) => { e.stopPropagation(); setPaymentModal(ad); }}
@@ -560,11 +604,15 @@ export default function App() {
           </div>
         )}
 
-        {/* PRODUCT DETAIL */}
+        {/* PRODUCT DETAIL SCREEN */}
         {currentScreen === 'detail' && selectedProduct && (
           <div style={{ position: 'absolute', inset: 0, backgroundColor: '#ffffff', zIndex: 50, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-            <div style={{ position: 'relative', height: '250px', backgroundColor: '#0f172a' }}>
-              <img src={selectedProduct.image} alt={selectedProduct.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <div style={{ position: 'relative', height: '260px', backgroundColor: '#0f172a' }}>
+              <img 
+                src={selectedProduct.images && selectedProduct.images.length > 0 ? selectedProduct.images[activeImageIndex] : 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80'} 
+                alt={selectedProduct.title} 
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+              />
               <button 
                 onClick={() => setCurrentScreen('home')}
                 style={{ position: 'absolute', top: '16px', left: '16px', backgroundColor: 'rgba(255,255,255,0.9)', border: 'none', padding: '8px', borderRadius: '50%', cursor: 'pointer' }}
@@ -575,6 +623,20 @@ export default function App() {
               <div style={{ position: 'absolute', bottom: '12px', right: '12px', backgroundColor: 'rgba(0,0,0,0.7)', color: '#ffffff', fontSize: '11px', fontWeight: 'bold', padding: '4px 10px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <Eye size={12} /> {selectedProduct.views} Views
               </div>
+
+              {selectedProduct.images && selectedProduct.images.length > 1 && (
+                <div style={{ position: 'absolute', bottom: '12px', left: '12px', display: 'flex', gap: '6px' }}>
+                  {selectedProduct.images.map((img, idx) => (
+                    <button 
+                      key={idx}
+                      onClick={() => setActiveImageIndex(idx)}
+                      style={{ width: '36px', height: '36px', borderRadius: '8px', overflow: 'hidden', border: activeImageIndex === idx ? '2px solid #f97316' : '2px solid white', padding: 0, cursor: 'pointer' }}
+                    >
+                      <img src={img} alt="thumb" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -588,10 +650,9 @@ export default function App() {
 
                 <h2 style={{ fontSize: '15px', fontWeight: 'bold', color: '#475569', marginBottom: '16px' }}>{selectedProduct.title}</h2>
 
-                {/* Make an Offer Button */}
                 <button 
                   onClick={() => setOfferModal(selectedProduct)}
-                  style={{ width: '100%', backgroundColor: '#fff7ed', border: '1px border #fed7aa', color: '#c2410c', padding: '10px', borderRadius: '14px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '16px' }}
+                  style={{ width: '100%', backgroundColor: '#fff7ed', border: '1px solid #fed7aa', color: '#c2410c', padding: '10px', borderRadius: '14px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '16px' }}
                 >
                   <Tag size={14} /> Make an Offer / Counter Price
                 </button>
@@ -612,22 +673,61 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div style={{ display: 'flex', gap: '10px', marginTop: '20px', paddingBottom: '10px' }}>
                 <a 
                   href={`tel:${selectedProduct.sellerPhone}`}
                   style={{ flex: 1, backgroundColor: '#0f172a', color: '#ffffff', padding: '14px', borderRadius: '16px', fontWeight: 'bold', fontSize: '13px', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                 >
-                  <Phone size={16} /> Direct Call
+                  <Phone size={16} /> Call Seller
                 </a>
                 <button 
-                  onClick={() => alert('Opening live chat...')}
+                  onClick={() => setCurrentScreen('chat')}
                   style={{ flex: 1, backgroundColor: '#f97316', color: '#ffffff', padding: '14px', borderRadius: '16px', fontWeight: 'bold', fontSize: '13px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                 >
-                  <MessageCircle size={16} /> Chat
+                  <MessageCircle size={16} /> In-App Chat
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* IN-APP CHAT SCREEN */}
+        {currentScreen === 'chat' && selectedProduct && (
+          <div style={{ position: 'absolute', inset: 0, backgroundColor: '#f8fafc', zIndex: 60, display: 'flex', flexDirection: 'column' }}>
+            <header style={{ backgroundColor: '#ffffff', padding: '16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button onClick={() => setCurrentScreen('detail')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <ArrowLeft size={18} />
+              </button>
+              <div>
+                <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#0f172a' }}>Chat with {selectedProduct.seller}</h3>
+                <p style={{ fontSize: '10px', color: '#64748b' }}>Regarding: {selectedProduct.title}</p>
+              </div>
+            </header>
+
+            <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {chatMessages.map(msg => (
+                <div key={msg.id} style={{ alignSelf: msg.sender === 'buyer' ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
+                  <div style={{ backgroundColor: msg.sender === 'buyer' ? '#f97316' : '#ffffff', color: msg.sender === 'buyer' ? '#ffffff' : '#0f172a', padding: '10px 14px', borderRadius: '16px', fontSize: '13px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', border: msg.sender === 'seller' ? '1px solid #e2e8f0' : 'none' }}>
+                    {msg.text}
+                  </div>
+                  <span style={{ fontSize: '9px', color: '#94a3b8', display: 'block', textAlign: msg.sender === 'buyer' ? 'right' : 'left', marginTop: '2px' }}>{msg.time}</span>
+                </div>
+              ))}
+            </div>
+
+            <form onSubmit={handleSendMessage} style={{ backgroundColor: '#ffffff', padding: '12px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '8px' }}>
+              <input 
+                type="text"
+                placeholder="Type a message..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                style={{ flex: 1, backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', padding: '10px 14px', borderRadius: '14px', fontSize: '13px', outline: 'none' }}
+                required
+              />
+              <button type="submit" style={{ backgroundColor: '#f97316', color: '#ffffff', border: 'none', padding: '10px 14px', borderRadius: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Send size={16} />
+              </button>
+            </form>
           </div>
         )}
 
@@ -638,10 +738,37 @@ export default function App() {
               <button onClick={() => setCurrentScreen('home')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                 <ArrowLeft size={18} />
               </button>
-              <h1 style={{ fontSize: '15px', fontWeight: 'bold', color: '#0f172a' }}>Post Your Free Ad (3 Days)</h1>
+              <h1 style={{ fontSize: '15px', fontWeight: 'bold', color: '#0f172a' }}>Post Ad (Upto 5 Photos)</h1>
             </header>
 
-            <form onSubmit={handlePublishAd} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '80px' }}>
+            <form onSubmit={handlePublishAd} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '90px' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '6px' }}>Upload Photos (Max 5)</label>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                  {newAd.images.map((img, idx) => (
+                    <div key={idx} style={{ position: 'relative', width: '70px', height: '70px' }}>
+                      <img src={img} alt="preview" style={{ width: '70px', height: '70px', objectFit: 'cover', borderRadius: '10px', border: '1px solid #cbd5e1' }} />
+                      <button 
+                        type="button"
+                        onClick={() => handleRemoveImage(idx)}
+                        style={{ position: 'absolute', top: '-6px', right: '-6px', backgroundColor: '#ef4444', color: '#ffffff', border: 'none', borderRadius: '50%', width: '20px', height: '20px', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+
+                  {newAd.images.length < 5 && (
+                    <label style={{ width: '70px', height: '70px', backgroundColor: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }}>
+                      <Camera size={20} />
+                      <span style={{ fontSize: '9px', marginTop: '2px' }}>Add Photo</span>
+                      <input type="file" accept="image/*" multiple onChange={handleImageUpload} style={{ display: 'none' }} />
+                    </label>
+                  )}
+                </div>
+                <span style={{ fontSize: '10px', color: '#94a3b8' }}>{newAd.images.length}/5 photos selected</span>
+              </div>
+
               <div>
                 <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '6px' }}>Category</label>
                 <select 
@@ -690,10 +817,6 @@ export default function App() {
                 />
               </div>
 
-              <div style={{ backgroundColor: '#fff7ed', padding: '12px', borderRadius: '12px', border: '1px solid #ffedd5', fontSize: '11px', color: '#c2410c', fontWeight: 'bold' }}>
-                ℹ️ Note: Ad will stay active for 3 days. Post 3 days, renew at ₹199/week.
-              </div>
-
               <button 
                 type="submit"
                 style={{ width: '100%', backgroundColor: '#f97316', color: '#ffffff', padding: '16px', borderRadius: '16px', fontWeight: 'bold', fontSize: '14px', border: 'none', cursor: 'pointer' }}
@@ -706,12 +829,12 @@ export default function App() {
 
         {/* NOTIFICATIONS SCREEN */}
         {currentScreen === 'notifications' && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff', overflowY: 'auto', paddingBottom: '80px' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff', overflowY: 'auto', paddingBottom: '90px' }}>
             <header style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button onClick={() => setCurrentScreen('home')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                 <ArrowLeft size={18} />
               </button>
-              <h1 style={{ fontSize: '15px', fontWeight: 'bold', color: '#0f172a' }}>Notifications</h1>
+              <h1 style={{ fontSize: '15px', fontWeight: 'bold', color: '#0f172a' }}>Push Notifications</h1>
             </header>
 
             <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -731,7 +854,7 @@ export default function App() {
 
         {/* ADMIN PANEL SCREEN */}
         {currentScreen === 'admin' && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff', overflowY: 'auto', paddingBottom: '80px' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff', overflowY: 'auto', paddingBottom: '90px' }}>
             <header style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button onClick={() => setCurrentScreen('home')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                 <ArrowLeft size={18} />
@@ -770,7 +893,7 @@ export default function App() {
 
         {/* PROFILE SCREEN */}
         {currentScreen === 'profile' && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '20px', overflowY: 'auto', paddingBottom: '80px' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '20px', overflowY: 'auto', paddingBottom: '90px' }}>
             <div style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '20px', border: '1px solid #ffedd5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ width: '45px', height: '45px', backgroundColor: '#f97316', color: '#ffffff', fontWeight: 'bold', fontSize: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -784,7 +907,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Admin Switch Link */}
             <button 
               onClick={() => setCurrentScreen('admin')}
               style={{ backgroundColor: '#0f172a', color: '#ffffff', border: 'none', padding: '12px', borderRadius: '14px', fontWeight: 'bold', fontSize: '12px', marginBottom: '20px', cursor: 'pointer' }}
@@ -798,7 +920,7 @@ export default function App() {
                 <div key={ad.id} style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '14px', border: '1px solid #ffedd5' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <img src={ad.image} alt={ad.title} style={{ width: '45px', height: '45px', borderRadius: '10px', objectFit: 'cover' }} />
+                      <img src={ad.images && ad.images.length > 0 ? ad.images[0] : ''} alt={ad.title} style={{ width: '45px', height: '45px', borderRadius: '10px', objectFit: 'cover' }} />
                       <div>
                         <h4 style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '13px' }}>₹{ad.price} | {ad.title}</h4>
                         <p style={{ fontSize: '10px', color: '#f97316', fontWeight: 'bold' }}>{getTimeRemaining(ad.expiryTime)} • {ad.views} Views</p>
@@ -837,7 +959,6 @@ export default function App() {
                 <button onClick={() => setPaymentModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
               </div>
 
-              {/* Paytm QR Code Mockup */}
               <div style={{ backgroundColor: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '16px', padding: '16px', marginBottom: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <QrCode size={120} className="text-slate-800" />
                 <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#0284c7', marginTop: '8px' }}>Scan with Paytm / Google Pay / PhonePe</span>
@@ -930,29 +1051,35 @@ export default function App() {
           </div>
         )}
 
-        {/* BOTTOM NAVIGATION */}
-        {currentScreen !== 'detail' && (
-          <nav style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#ffffff', borderTop: '1px solid #ffedd5', display: 'flex', justifyContent: 'space-around', alignItems: 'center', height: '65px', padding: '0 10px', zIndex: 40 }}>
-            <button onClick={() => setCurrentScreen('home')} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: currentScreen === 'home' ? '#f97316' : '#94a3b8', cursor: 'pointer', flex: 1 }}>
-              <Home size={20} />
-              <span style={{ fontSize: '10px', fontWeight: currentScreen === 'home' ? 'bold' : 'normal' }}>Home</span>
+        {/* PERFECTLY ALIGNED BOTTOM NAVIGATION BAR */}
+        {currentScreen !== 'detail' && currentScreen !== 'chat' && (
+          <nav style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#ffffff', borderTop: '1px solid #ffedd5', display: 'flex', justifyContent: 'space-around', alignItems: 'center', height: '70px', padding: '0 8px', zIndex: 40 }}>
+            <button onClick={() => setCurrentScreen('home')} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px', color: currentScreen === 'home' ? '#f97316' : '#94a3b8', cursor: 'pointer', flex: 1 }}>
+              <Home size={22} />
+              <span style={{ fontSize: '10px', fontWeight: currentScreen === 'home' ? 'bold' : 'normal', lineHeight: '1' }}>Home</span>
             </button>
 
-            <button onClick={() => setCurrentScreen('profile')} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: currentScreen === 'profile' ? '#f97316' : '#94a3b8', cursor: 'pointer', flex: 1 }}>
-              <Heart size={20} />
-              <span style={{ fontSize: '10px', fontWeight: currentScreen === 'profile' ? 'bold' : 'normal' }}>My Ads</span>
+            <button onClick={() => setCurrentScreen('profile')} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px', color: currentScreen === 'profile' ? '#f97316' : '#94a3b8', cursor: 'pointer', flex: 1 }}>
+              <Heart size={22} />
+              <span style={{ fontSize: '10px', fontWeight: currentScreen === 'profile' ? 'bold' : 'normal', lineHeight: '1' }}>My Ads</span>
             </button>
 
-            <button onClick={() => setCurrentScreen('sell')} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', top: '-12px', cursor: 'pointer', flex: 1 }}>
-              <div style={{ width: '48px', height: '48px', backgroundColor: '#f97316', color: '#ffffff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(249, 115, 22, 0.4)', border: '4px solid #FFF9F5' }}>
-                <PlusCircle size={24} />
-              </div>
-              <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#f97316' }}>Sell</span>
-            </button>
+            {/* Central Floating Sell Button */}
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'center', position: 'relative' }}>
+              <button 
+                onClick={() => setCurrentScreen('sell')} 
+                style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'absolute', top: '-24px', cursor: 'pointer', padding: 0 }}
+              >
+                <div style={{ width: '50px', height: '50px', backgroundColor: '#f97316', color: '#ffffff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 16px rgba(249, 115, 22, 0.4)', border: '4px solid #FFF9F5' }}>
+                  <PlusCircle size={26} />
+                </div>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#f97316', marginTop: '2px', lineHeight: '1' }}>Sell</span>
+              </button>
+            </div>
 
-            <button onClick={() => setCurrentScreen('profile')} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: currentScreen === 'profile' ? '#f97316' : '#94a3b8', cursor: 'pointer', flex: 1 }}>
-              <User size={20} />
-              <span style={{ fontSize: '10px', fontWeight: currentScreen === 'profile' ? 'bold' : 'normal' }}>Account</span>
+            <button onClick={() => setCurrentScreen('profile')} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px', color: currentScreen === 'profile' ? '#f97316' : '#94a3b8', cursor: 'pointer', flex: 1 }}>
+              <User size={22} />
+              <span style={{ fontSize: '10px', fontWeight: currentScreen === 'profile' ? 'bold' : 'normal', lineHeight: '1' }}>Account</span>
             </button>
           </nav>
         )}
