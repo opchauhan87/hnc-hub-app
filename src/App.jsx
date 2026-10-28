@@ -1,4 +1,11 @@
-// App.jsx ke andar kahin bhi yeh component rakh lein
+import React, { useState, useEffect } from 'react';
+import { 
+  Home, Search, Heart, User, PlusCircle, MapPin, 
+  Car, Smartphone, Laptop, Home as HomeIcon, Briefcase, 
+  ArrowLeft, Phone, MessageCircle, Trash2, X, Navigation, RefreshCw, Clock,
+  Eye, Tag, QrCode, ShieldCheck, Bell, CheckCircle2, AlertCircle
+} from 'lucide-react';
+
 function AppLogo({ size = "md" }) {
   const isLarge = size === "lg";
   return (
@@ -30,61 +37,153 @@ function AppLogo({ size = "md" }) {
   );
 }
 
-import React, { useState } from 'react';
-import { 
-  Home, Search, Heart, User, PlusCircle, MapPin, 
-  Car, Smartphone, Laptop, Home as HomeIcon, Briefcase, 
-  ArrowLeft, Phone, MessageCircle, Trash2, Edit3, Share2, 
-  ChevronDown, Camera, X, Lock, Mail, UserCheck
-} from 'lucide-react';
+function getTimeRemaining(expiryTime) {
+  const total = new Date(expiryTime) - new Date();
+  if (total <= 0) return 'Expired';
+  
+  const days = Math.floor(total / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((total / (1000 * 60 * 60)) % 24);
+  const minutes = Math.floor((total / 1000 / 60) % 60);
+
+  if (days > 0) return `${days}d ${hours}h left`;
+  if (hours > 0) return `${hours}h ${minutes}m left`;
+  return `${minutes}m left`;
+}
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState('welcome');
-  const [authModal, setAuthModal] = useState(null); // 'login' | 'signup' | null
-  const [user, setUser] = useState({ name: 'Rahul K.', email: 'rahul@example.com', location: 'Jaipur' });
+  // --- USER AUTH STATE ---
+  const [user, setUser] = useState(null);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [countryCode, setCountryCode] = useState('+91');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [authError, setAuthError] = useState('');
 
+  // --- GPS LOCATION STATE ---
+  const [currentLocation, setCurrentLocation] = useState('Jaipur, RJ');
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationModal, setLocationModal] = useState(false);
+
+  // --- MODALS & NOTIFICATION STATES ---
+  const [paymentModal, setPaymentModal] = useState(null); // ad object to renew
+  const [offerModal, setOfferModal] = useState(null); // ad object to offer
+  const [offeredPrice, setOfferedPrice] = useState('');
+  const [txnId, setTxnId] = useState('');
+  const [notifications, setNotifications] = useState([
+    { id: 1, title: 'Welcome to HNC Hub!', body: 'Post ads for free with 3 days validity.', time: 'Just now', read: false }
+  ]);
+  const [adminRequests, setAdminRequests] = useState([]); // Pending payment approvals
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('hnc_user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+  }, []);
+
+  const fetchGPSLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+          const data = await res.json();
+          const city = data.address.city || data.address.town || data.address.suburb || data.address.state_district || 'Jaipur';
+          const state = data.address.state ? data.address.state.slice(0, 2).toUpperCase() : '';
+          const locName = `${city}${state ? ', ' + state : ''}`;
+          
+          setCurrentLocation(locName);
+          if (user) {
+            const updatedUser = { ...user, location: locName };
+            setUser(updatedUser);
+            localStorage.setItem('hnc_user', JSON.stringify(updatedUser));
+          }
+        } catch (err) {
+          setCurrentLocation(`Lat: ${latitude.toFixed(2)}, Lon: ${longitude.toFixed(2)}`);
+        } finally {
+          setIsLocating(false);
+          setLocationModal(false);
+        }
+      },
+      () => {
+        setIsLocating(false);
+        alert('Unable to fetch location. Please check GPS permissions.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const handleAuthSubmit = (e) => {
+    e.preventDefault();
+    if (!phoneNumber || phoneNumber.trim().length < 10) {
+      setAuthError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    if (isSignUp) {
+      if (!fullName.trim()) { setAuthError('Please enter your full name.'); return; }
+      if (!email.trim() || !email.includes('@')) { setAuthError('Please enter a valid email address.'); return; }
+    }
+    setAuthError('');
+
+    const fullPhone = `${countryCode} ${phoneNumber.trim()}`;
+    const userData = { 
+      phone: fullPhone, 
+      name: isSignUp ? fullName.trim() : ('User ' + phoneNumber.slice(-4)), 
+      email: isSignUp ? email.trim() : (phoneNumber + '@hnchub.com'),
+      location: currentLocation 
+    };
+
+    localStorage.setItem('hnc_user', JSON.stringify(userData));
+    setUser(userData);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('hnc_user');
+    setUser(null);
+    setCurrentScreen('home');
+  };
+
+  // --- APP NAVIGATION & ADS STATE ---
+  const [currentScreen, setCurrentScreen] = useState('home'); // home, detail, sell, profile, notifications, admin
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
-
-  const [authForm, setAuthForm] = useState({ email: '', password: '', name: '' });
 
   const [ads, setAds] = useState([
     {
       id: 1,
       title: 'Toyota Corolla 2021',
-      price: '12,500',
+      price: '1250000',
       category: 'Vehicles',
-      location: 'Jaipur',
-      time: '2 days ago',
+      location: 'Malviya Nagar, Jaipur',
+      expiryTime: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      views: 42,
       image: 'https://images.unsplash.com/photo-1590362891991-f776e747a588?auto=format&fit=crop&w=600&q=80',
       description: 'Well maintained family car, first owner, insurance valid till end of year.',
       seller: 'Rahul K.',
+      sellerPhone: '+91 9876543210',
       sellerJoined: '2021'
     },
     {
       id: 2,
       title: 'iPhone 13 Pro (128GB)',
-      price: '650',
+      price: '48000',
       category: 'Mobiles',
-      location: 'Jaipur',
-      time: '1 day ago',
+      location: 'Vaishali Nagar, Jaipur',
+      expiryTime: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // Expiring soon for test
+      views: 128,
       image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80',
       description: 'Selling my well-maintained iPhone in mint condition. Includes original box and fast charger.',
-      seller: 'Rahul K.',
-      sellerJoined: '2021'
-    },
-    {
-      id: 3,
-      title: 'Modern Wooden Sofa Set',
-      price: '320',
-      category: 'Furniture',
-      location: 'Jaipur',
-      time: '2 days ago',
-      image: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=600&q=80',
-      description: '5-seater comfortable wooden sofa set with premium cushions.',
-      seller: 'Rahul K.',
-      sellerJoined: '2021'
+      seller: 'Amit S.',
+      sellerPhone: '+91 9123456789',
+      sellerJoined: '2022'
     }
   ]);
 
@@ -94,7 +193,7 @@ export default function App() {
     title: '',
     price: '',
     category: 'Mobiles',
-    location: 'Jaipur',
+    location: currentLocation,
     description: '',
     image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80'
   });
@@ -116,30 +215,108 @@ export default function App() {
     }
   };
 
-  const handleAuthSubmit = (e) => {
-    e.preventDefault();
-    if (authModal === 'signup') {
-      setUser({ name: authForm.name || 'New User', email: authForm.email, location: 'Jaipur' });
-    }
-    setAuthModal(null);
-    setCurrentScreen('home');
+  // Increment view counter when opening ad detail
+  const openAdDetail = (ad) => {
+    const updatedAds = ads.map(item => item.id === ad.id ? { ...item, views: item.views + 1 } : item);
+    setAds(updatedAds);
+    setSelectedProduct({ ...ad, views: ad.views + 1 });
+    setCurrentScreen('detail');
   };
 
   const handlePublishAd = (e) => {
     e.preventDefault();
     if (!newAd.title || !newAd.price) return;
     
+    const threeDaysLater = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+
     const createdAd = {
       id: Date.now(),
       ...newAd,
-      time: 'Just now',
-      seller: user.name,
+      location: currentLocation,
+      expiryTime: threeDaysLater,
+      views: 1,
+      seller: user ? user.name : 'Guest User',
+      sellerPhone: user ? user.phone : '+91 9876543210',
       sellerJoined: '2026'
     };
 
     setAds([createdAd, ...ads]);
     setCurrentScreen('home');
-    setNewAd({ title: '', price: '', category: 'Mobiles', location: 'Jaipur', description: '', image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80' });
+    setNewAd({ title: '', price: '', category: 'Mobiles', location: currentLocation, description: '', image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80' });
+  };
+
+  // Submit Payment Request to Admin
+  const handlePaymentSubmit = (e) => {
+    e.preventDefault();
+    if (!txnId.trim()) {
+      alert('Please enter Paytm Transaction ID / UTR number.');
+      return;
+    }
+
+    const newRequest = {
+      id: Date.now(),
+      adId: paymentModal.id,
+      adTitle: paymentModal.title,
+      userPhone: user.phone,
+      userName: user.name,
+      amount: '199',
+      txnId: txnId.trim(),
+      status: 'pending'
+    };
+
+    setAdminRequests([newRequest, ...adminRequests]);
+    alert('Payment details submitted! Admin confirmation pending.');
+    setPaymentModal(null);
+    setTxnId('');
+  };
+
+  // Admin approves payment -> extends ad by 7 days & notifies user
+  const handleAdminApprove = (reqId) => {
+    const req = adminRequests.find(r => r.id === reqId);
+    if (!req) return;
+
+    // Extend ad by 7 days (1 week)
+    const newExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    setAds(ads.map(ad => ad.id === req.adId ? { ...ad, expiryTime: newExpiry } : ad));
+
+    // Update Request status
+    setAdminRequests(adminRequests.map(r => r.id === reqId ? { ...r, status: 'approved' } : r));
+
+    // Send Notification to User
+    setNotifications([
+      {
+        id: Date.now(),
+        title: 'Payment Received & Ad Renewed! 🎉',
+        body: `Payment of ₹199 for "${req.adTitle}" confirmed by Admin. Extended for 7 Days!`,
+        time: 'Just now',
+        read: false
+      },
+      ...notifications
+    ]);
+  };
+
+  // Buyer sends custom price offer
+  const handleSendOffer = (e) => {
+    e.preventDefault();
+    if (!offeredPrice || Number(offeredPrice) <= 0) {
+      alert('Please enter a valid offer amount.');
+      return;
+    }
+
+    setNotifications([
+      {
+        id: Date.now(),
+        title: `New Price Offer: ₹${offeredPrice}`,
+        body: `${user.name} offered ₹${offeredPrice} for "${offerModal.title}" (Original Price: ₹${offerModal.price}).`,
+        time: 'Just now',
+        read: false
+      },
+      ...notifications
+    ]);
+
+    alert(`Offer of ₹${offeredPrice} sent successfully to seller!`);
+    setOfferModal(null);
+    setOfferedPrice('');
   };
 
   const filteredAds = ads.filter(ad => {
@@ -148,66 +325,143 @@ export default function App() {
     return matchesCategory && matchesSearch;
   });
 
+  // ==========================================
+  // 1. MANDATORY LOGIN / SIGNUP SCREEN
+  // ==========================================
+  if (!user) {
+    return (
+      <div style={{ backgroundColor: '#0f172a', minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px' }}>
+        <div style={{ width: '100%', maxWidth: '400px', height: '850px', backgroundColor: '#FFF9F5', borderRadius: '36px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column', border: '8px solid #1e293b', padding: '24px', justifyContent: 'center' }}>
+          
+          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+            <div style={{ display: 'inline-flex', marginBottom: '10px' }}>
+              <AppLogo size="lg" />
+            </div>
+            <h2 style={{ fontSize: '18px', fontWeight: '900', color: '#0f172a', marginTop: '6px' }}>
+              {isSignUp ? 'Create New Account' : 'Welcome Back'}
+            </h2>
+            <p style={{ color: '#64748b', fontSize: '12px', marginTop: '2px' }}>
+              {isSignUp ? 'Register with details & mobile number' : 'Sign in to access your marketplace'}
+            </p>
+          </div>
+
+          <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {isSignUp && (
+              <>
+                <div>
+                  <label style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '3px', textTransform: 'uppercase' }}>Full Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="Rahul Kumar"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    style={{ width: '100%', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', padding: '10px', borderRadius: '12px', fontSize: '13px', fontWeight: 'bold', outline: 'none' }}
+                    required={isSignUp}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '3px', textTransform: 'uppercase' }}>Email Address</label>
+                  <input 
+                    type="email" 
+                    placeholder="rahul@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    style={{ width: '100%', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', padding: '10px', borderRadius: '12px', fontSize: '13px', fontWeight: 'bold', outline: 'none' }}
+                    required={isSignUp}
+                  />
+                </div>
+              </>
+            )}
+
+            <div>
+              <label style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '3px', textTransform: 'uppercase' }}>Mobile Number (Mandatory)</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <select 
+                  value={countryCode} 
+                  onChange={(e) => setCountryCode(e.target.value)}
+                  style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', fontWeight: 'bold', fontSize: '12px', borderRadius: '12px', padding: '10px 6px', outline: 'none' }}
+                >
+                  <option value="+91">+91 (IN)</option>
+                  <option value="+1">+1 (US)</option>
+                  <option value="+44">+44 (UK)</option>
+                  <option value="+971">+971 (UAE)</option>
+                </select>
+
+                <input 
+                  type="tel" 
+                  placeholder="9876543210"
+                  value={phoneNumber}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    if (val.length <= 10) setPhoneNumber(val);
+                  }}
+                  style={{ flex: 1, backgroundColor: '#ffffff', border: '1px solid #cbd5e1', padding: '10px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold', outline: 'none' }}
+                  maxLength={10}
+                  required
+                />
+              </div>
+              {authError && <p style={{ fontSize: '11px', color: '#ef4444', fontWeight: 'bold', marginTop: '4px' }}>{authError}</p>}
+            </div>
+
+            <button 
+              type="submit"
+              style={{ width: '100%', backgroundColor: '#f97316', color: '#ffffff', padding: '14px', borderRadius: '14px', fontWeight: 'bold', fontSize: '14px', border: 'none', cursor: 'pointer', boxShadow: '0 8px 12px -3px rgba(249, 115, 22, 0.3)', marginTop: '6px' }}
+            >
+              {isSignUp ? 'Register & Continue' : 'Sign In'}
+            </button>
+          </form>
+
+          <div style={{ textAlign: 'center', marginTop: '14px' }}>
+            <button 
+              type="button"
+              onClick={() => { setIsSignUp(!isSignUp); setAuthError(''); }}
+              style={{ background: 'none', border: 'none', color: '#f97316', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+            >
+              {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+            </button>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // 2. MAIN APP INTERFACE (Logged In)
+  // ==========================================
   return (
     <div style={{ backgroundColor: '#0f172a', minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px' }}>
       
-      {/* Exact Mobile App Device Frame */}
       <div style={{ width: '100%', maxWidth: '400px', height: '850px', backgroundColor: '#FFF9F5', borderRadius: '36px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column', border: '8px solid #1e293b' }}>
 
-        {/* 1. WELCOME SCREEN */}
-        {currentScreen === 'welcome' && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '24px', textAlign: 'center' }}>
-            <div style={{ marginTop: '30px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '30px' }}>
-                <div style={{ backgroundColor: '#f97316', color: '#ffffff', fontWeight: 'bold', padding: '6px 12px', borderRadius: '12px', fontSize: '20px' }}>H</div>
-                <span style={{ fontSize: '28px', fontWeight: '900', color: '#1e293b' }}>HNC Hub</span>
-              </div>
-
-              <div style={{ backgroundColor: '#ffffff', padding: '30px 20px', borderRadius: '24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '1px solid #ffedd5', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ width: '70px', height: '70px', backgroundColor: '#ffedd5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f97316', marginBottom: '15px' }}>
-                  <Home size={32} />
-                </div>
-                <h2 style={{ fontSize: '22px', fontWeight: '900', color: '#1e293b', marginBottom: '8px' }}>Welcome to HNC Hub!</h2>
-                <p style={{ color: '#64748b', fontSize: '14px' }}>Buy. Sell. Connect.</p>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
-              <button 
-                onClick={() => setAuthModal('signup')}
-                style={{ width: '100%', backgroundColor: '#f97316', color: '#ffffff', padding: '16px', borderRadius: '16px', fontWeight: 'bold', fontSize: '15px', border: 'none', cursor: 'pointer', boxShadow: '0 10px 15px -3px rgba(249, 115, 22, 0.3)' }}
-              >
-                Get Started (Sign Up)
-              </button>
-              <button 
-                onClick={() => setAuthModal('login')}
-                style={{ width: '100%', backgroundColor: '#ffffff', color: '#334155', padding: '16px', borderRadius: '16px', fontWeight: 'bold', fontSize: '15px', border: '1px solid #cbd5e1', cursor: 'pointer' }}
-              >
-                Sign In
-              </button>
-              <button 
-                onClick={() => setCurrentScreen('home')}
-                style={{ backgroundColor: 'transparent', border: 'none', color: '#94a3b8', fontSize: '12px', fontWeight: '600', cursor: 'pointer', marginTop: '5px' }}
-              >
-                Skip & Browse Marketplace
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 2. HOME FEED */}
+        {/* HOME FEED */}
         {currentScreen === 'home' && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <header style={{ backgroundColor: '#ffffff', padding: '16px', borderBottom: '1px solid #ffedd5', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <AppLogo size="sm" />
+                
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ backgroundColor: '#f97316', color: '#ffffff', fontWeight: 'bold', padding: '4px 8px', borderRadius: '8px', fontSize: '14px' }}>H</div>
-                  <span style={{ fontSize: '16px', fontWeight: '900', color: '#1e293b' }}>HNC Hub</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', fontSize: '12px', backgroundColor: '#ffedd5', color: '#f97316', padding: '6px 12px', borderRadius: '20px', fontWeight: '600', gap: '4px', marginLeft: 'auto' }}>
-                  <MapPin size={14} />
-                  <span>{user.location}</span>
-                  <ChevronDown size={12} />
+                  {/* Notification Icon */}
+                  <button 
+                    onClick={() => setCurrentScreen('notifications')}
+                    style={{ position: 'relative', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '6px', borderRadius: '50%', cursor: 'pointer' }}
+                  >
+                    <Bell size={16} className="text-slate-700" />
+                    {notifications.some(n => !n.read) && (
+                      <span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', backgroundColor: '#ef4444', borderRadius: '50%' }}></span>
+                    )}
+                  </button>
+
+                  {/* Location Badge */}
+                  <button 
+                    onClick={() => setLocationModal(true)}
+                    style={{ display: 'flex', alignItems: 'center', fontSize: '11px', backgroundColor: '#ffedd5', color: '#f97316', padding: '6px 10px', borderRadius: '20px', fontWeight: '700', gap: '4px', border: 'none', cursor: 'pointer' }}
+                  >
+                    <MapPin size={13} />
+                    <span>{currentLocation}</span>
+                  </button>
                 </div>
               </div>
 
@@ -224,6 +478,7 @@ export default function App() {
             </header>
 
             <main style={{ padding: '16px', flex: 1, overflowY: 'auto', paddingBottom: '80px' }}>
+              {/* Category Filter */}
               <div style={{ marginBottom: '16px', display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }}>
                 {categories.map((cat, idx) => {
                   const IconComp = cat.icon;
@@ -241,40 +496,71 @@ export default function App() {
                 })}
               </div>
 
+              {/* Feed Grid */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                {filteredAds.map((ad) => (
-                  <div 
-                    key={ad.id}
-                    onClick={() => { setSelectedProduct(ad); setCurrentScreen('detail'); }}
-                    style={{ backgroundColor: '#ffffff', borderRadius: '16px', overflow: 'hidden', border: '1px solid #ffedd5', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}
-                  >
-                    <div style={{ position: 'relative', height: '130px', backgroundColor: '#e2e8f0' }}>
-                      <img src={ad.image} alt={ad.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      <button 
-                        onClick={(e) => toggleWishlist(ad.id, e)}
-                        style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: 'rgba(255,255,255,0.8)', border: 'none', padding: '6px', borderRadius: '50%', cursor: 'pointer' }}
-                      >
-                        <Heart size={14} className={wishlist.includes(ad.id) ? "fill-red-500 text-red-500" : "text-slate-600"} />
-                      </button>
-                    </div>
-                    <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1 }}>
-                      <div>
-                        <h3 style={{ fontWeight: '900', color: '#0f172a', fontSize: '15px', marginBottom: '2px' }}>${ad.price}</h3>
-                        <p style={{ fontSize: '11px', fontWeight: '600', color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ad.title}</p>
+                {filteredAds.map((ad) => {
+                  const timeRemaining = getTimeRemaining(ad.expiryTime);
+                  const isExpired = timeRemaining === 'Expired';
+
+                  return (
+                    <div 
+                      key={ad.id}
+                      onClick={() => openAdDetail(ad)}
+                      style={{ backgroundColor: '#ffffff', borderRadius: '16px', overflow: 'hidden', border: '1px solid #ffedd5', cursor: 'pointer', display: 'flex', flexDirection: 'column', opacity: isExpired ? 0.65 : 1 }}
+                    >
+                      <div style={{ position: 'relative', height: '130px', backgroundColor: '#e2e8f0' }}>
+                        <img src={ad.image} alt={ad.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        
+                        {/* Expiry Badge */}
+                        <div style={{ position: 'absolute', bottom: '6px', left: '6px', backgroundColor: isExpired ? '#ef4444' : 'rgba(15, 23, 42, 0.85)', color: '#ffffff', fontSize: '9px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <Clock size={10} />
+                          <span>{timeRemaining}</span>
+                        </div>
+
+                        {/* View Counter */}
+                        <div style={{ position: 'absolute', top: '8px', left: '8px', backgroundColor: 'rgba(0,0,0,0.6)', color: '#ffffff', fontSize: '9px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <Eye size={10} />
+                          <span>{ad.views}</span>
+                        </div>
+
+                        <button 
+                          onClick={(e) => toggleWishlist(ad.id, e)}
+                          style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: 'rgba(255,255,255,0.85)', border: 'none', padding: '6px', borderRadius: '50%', cursor: 'pointer' }}
+                        >
+                          <Heart size={14} className={wishlist.includes(ad.id) ? "fill-red-500 text-red-500" : "text-slate-600"} />
+                        </button>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '8px', paddingTop: '6px', borderTop: '1px solid #f1f5f9', fontSize: '10px', color: '#94a3b8' }}>
-                        <MapPin size={10} />
-                        <span>{ad.location}</span>
+
+                      <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1 }}>
+                        <div>
+                          <h3 style={{ fontWeight: '900', color: '#0f172a', fontSize: '15px', marginBottom: '2px' }}>₹{Number(ad.price).toLocaleString()}</h3>
+                          <p style={{ fontSize: '11px', fontWeight: '600', color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ad.title}</p>
+                        </div>
+
+                        {/* Renew Option if Expired */}
+                        {isExpired && (
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setPaymentModal(ad); }}
+                            style={{ backgroundColor: '#f97316', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '4px', fontSize: '10px', fontWeight: 'bold', marginTop: '6px', cursor: 'pointer' }}
+                          >
+                            Renew ₹199 / Week
+                          </button>
+                        )}
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '8px', paddingTop: '6px', borderTop: '1px solid #f1f5f9', fontSize: '10px', color: '#94a3b8' }}>
+                          <MapPin size={10} />
+                          <span>{ad.location}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </main>
           </div>
         )}
 
-        {/* 3. PRODUCT DETAIL */}
+        {/* PRODUCT DETAIL */}
         {currentScreen === 'detail' && selectedProduct && (
           <div style={{ position: 'absolute', inset: 0, backgroundColor: '#ffffff', zIndex: 50, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
             <div style={{ position: 'relative', height: '250px', backgroundColor: '#0f172a' }}>
@@ -285,12 +571,30 @@ export default function App() {
               >
                 <ArrowLeft size={18} />
               </button>
+
+              <div style={{ position: 'absolute', bottom: '12px', right: '12px', backgroundColor: 'rgba(0,0,0,0.7)', color: '#ffffff', fontSize: '11px', fontWeight: 'bold', padding: '4px 10px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Eye size={12} /> {selectedProduct.views} Views
+              </div>
             </div>
 
             <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div>
-                <h1 style={{ fontSize: '26px', fontWeight: '900', color: '#0f172a', marginBottom: '4px' }}>${selectedProduct.price}</h1>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#0f172a' }}>₹{Number(selectedProduct.price).toLocaleString()}</h1>
+                  <span style={{ backgroundColor: '#fff7ed', color: '#f97316', border: '1px solid #ffedd5', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Clock size={12} /> {getTimeRemaining(selectedProduct.expiryTime)}
+                  </span>
+                </div>
+
                 <h2 style={{ fontSize: '15px', fontWeight: 'bold', color: '#475569', marginBottom: '16px' }}>{selectedProduct.title}</h2>
+
+                {/* Make an Offer Button */}
+                <button 
+                  onClick={() => setOfferModal(selectedProduct)}
+                  style={{ width: '100%', backgroundColor: '#fff7ed', border: '1px border #fed7aa', color: '#c2410c', padding: '10px', borderRadius: '14px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '16px' }}
+                >
+                  <Tag size={14} /> Make an Offer / Counter Price
+                </button>
 
                 <div style={{ marginBottom: '16px' }}>
                   <h3 style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Description</h3>
@@ -303,16 +607,23 @@ export default function App() {
                   </div>
                   <div>
                     <h4 style={{ fontSize: '13px', fontWeight: 'bold', color: '#0f172a' }}>Seller: {selectedProduct.seller}</h4>
-                    <p style={{ fontSize: '11px', color: '#64748b' }}>Member since {selectedProduct.sellerJoined}</p>
+                    <p style={{ fontSize: '11px', color: '#64748b' }}>Phone: {selectedProduct.sellerPhone}</p>
                   </div>
                 </div>
               </div>
 
+              {/* Action Buttons */}
               <div style={{ display: 'flex', gap: '10px', marginTop: '20px', paddingBottom: '10px' }}>
-                <button style={{ flex: 1, backgroundColor: '#0f172a', color: '#ffffff', padding: '14px', borderRadius: '16px', fontWeight: 'bold', fontSize: '13px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                  <Phone size={16} /> Call
-                </button>
-                <button style={{ flex: 1, backgroundColor: '#f97316', color: '#ffffff', padding: '14px', borderRadius: '16px', fontWeight: 'bold', fontSize: '13px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <a 
+                  href={`tel:${selectedProduct.sellerPhone}`}
+                  style={{ flex: 1, backgroundColor: '#0f172a', color: '#ffffff', padding: '14px', borderRadius: '16px', fontWeight: 'bold', fontSize: '13px', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                >
+                  <Phone size={16} /> Direct Call
+                </a>
+                <button 
+                  onClick={() => alert('Opening live chat...')}
+                  style={{ flex: 1, backgroundColor: '#f97316', color: '#ffffff', padding: '14px', borderRadius: '16px', fontWeight: 'bold', fontSize: '13px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                >
                   <MessageCircle size={16} /> Chat
                 </button>
               </div>
@@ -320,19 +631,19 @@ export default function App() {
           </div>
         )}
 
-        {/* 4. POST AD */}
+        {/* POST AD */}
         {currentScreen === 'sell' && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff', overflowY: 'auto' }}>
             <header style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button onClick={() => setCurrentScreen('home')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                 <ArrowLeft size={18} />
               </button>
-              <h1 style={{ fontSize: '15px', fontWeight: 'bold', color: '#0f172a' }}>Post Your Ad</h1>
+              <h1 style={{ fontSize: '15px', fontWeight: 'bold', color: '#0f172a' }}>Post Your Free Ad (3 Days)</h1>
             </header>
 
             <form onSubmit={handlePublishAd} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '80px' }}>
               <div>
-                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '6px' }}>Step 1: Category</label>
+                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '6px' }}>Category</label>
                 <select 
                   value={newAd.category}
                   onChange={(e) => setNewAd({...newAd, category: e.target.value})}
@@ -346,10 +657,20 @@ export default function App() {
               </div>
 
               <div>
-                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '6px' }}>Step 2: Price ($)</label>
+                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '6px' }}>Location (Auto-detected)</label>
+                <input 
+                  type="text" 
+                  value={currentLocation}
+                  disabled
+                  style={{ width: '100%', backgroundColor: '#f1f5f9', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '14px', fontSize: '13px', fontWeight: 'bold', color: '#475569' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '6px' }}>Price (₹)</label>
                 <input 
                   type="number" 
-                  placeholder="Set Price" 
+                  placeholder="Set Price in ₹" 
                   value={newAd.price}
                   onChange={(e) => setNewAd({...newAd, price: e.target.value})}
                   style={{ width: '100%', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '14px', fontSize: '13px', outline: 'none' }}
@@ -358,7 +679,7 @@ export default function App() {
               </div>
 
               <div>
-                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '6px' }}>Step 3: Title & Description</label>
+                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '6px' }}>Title & Description</label>
                 <textarea 
                   rows="3"
                   placeholder="What are you selling?" 
@@ -369,20 +690,88 @@ export default function App() {
                 />
               </div>
 
+              <div style={{ backgroundColor: '#fff7ed', padding: '12px', borderRadius: '12px', border: '1px solid #ffedd5', fontSize: '11px', color: '#c2410c', fontWeight: 'bold' }}>
+                ℹ️ Note: Ad will stay active for 3 days. Post 3 days, renew at ₹199/week.
+              </div>
+
               <button 
                 type="submit"
-                style={{ width: '100%', backgroundColor: '#f97316', color: '#ffffff', padding: '16px', borderRadius: '16px', fontWeight: 'bold', fontSize: '14px', border: 'none', cursor: 'pointer', marginTop: '10px' }}
+                style={{ width: '100%', backgroundColor: '#f97316', color: '#ffffff', padding: '16px', borderRadius: '16px', fontWeight: 'bold', fontSize: '14px', border: 'none', cursor: 'pointer' }}
               >
-                Publish Ad
+                Publish Free Ad
               </button>
             </form>
           </div>
         )}
 
-        {/* 5. PROFILE */}
+        {/* NOTIFICATIONS SCREEN */}
+        {currentScreen === 'notifications' && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff', overflowY: 'auto', paddingBottom: '80px' }}>
+            <header style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button onClick={() => setCurrentScreen('home')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <ArrowLeft size={18} />
+              </button>
+              <h1 style={{ fontSize: '15px', fontWeight: 'bold', color: '#0f172a' }}>Notifications</h1>
+            </header>
+
+            <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {notifications.map(n => (
+                <div key={n.id} style={{ backgroundColor: '#fff7ed', border: '1px solid #ffedd5', borderRadius: '14px', padding: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f97316', fontWeight: 'bold', fontSize: '13px' }}>
+                    <Bell size={14} />
+                    <span>{n.title}</span>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#475569', marginTop: '4px' }}>{n.body}</p>
+                  <span style={{ fontSize: '10px', color: '#94a3b8', display: 'block', marginTop: '6px' }}>{n.time}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ADMIN PANEL SCREEN */}
+        {currentScreen === 'admin' && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: '#ffffff', overflowY: 'auto', paddingBottom: '80px' }}>
+            <header style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button onClick={() => setCurrentScreen('home')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <ArrowLeft size={18} />
+              </button>
+              <h1 style={{ fontSize: '15px', fontWeight: 'bold', color: '#0f172a' }}>Admin Panel — Payments</h1>
+            </header>
+
+            <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b' }}>Pending Renewal Payments (₹199)</h3>
+              
+              {adminRequests.length === 0 ? (
+                <p style={{ fontSize: '12px', color: '#94a3b8' }}>No pending approval requests.</p>
+              ) : (
+                adminRequests.map(req => (
+                  <div key={req.id} style={{ backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '16px', padding: '14px' }}>
+                    <h4 style={{ fontSize: '13px', fontWeight: 'bold', color: '#0f172a' }}>Ad: {req.adTitle}</h4>
+                    <p style={{ fontSize: '11px', color: '#475569', marginTop: '2px' }}>User: {req.userName} ({req.userPhone})</p>
+                    <p style={{ fontSize: '11px', color: '#059669', fontWeight: 'bold', marginTop: '2px' }}>Txn ID: {req.txnId} (Amount: ₹{req.amount})</p>
+                    
+                    {req.status === 'pending' ? (
+                      <button 
+                        onClick={() => handleAdminApprove(req.id)}
+                        style={{ width: '100%', backgroundColor: '#059669', color: '#ffffff', border: 'none', padding: '8px', borderRadius: '10px', fontWeight: 'bold', fontSize: '12px', marginTop: '8px', cursor: 'pointer' }}
+                      >
+                        Approve & Extend 7 Days
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#059669', display: 'block', marginTop: '6px' }}>✓ Approved & Extended</span>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* PROFILE SCREEN */}
         {currentScreen === 'profile' && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '20px', overflowY: 'auto', paddingBottom: '80px' }}>
-            <div style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '20px', border: '1px solid #ffedd5', display: 'flex', alignItems: 'center', justifyContent: 'between', marginBottom: '20px' }}>
+            <div style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '20px', border: '1px solid #ffedd5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ width: '45px', height: '45px', backgroundColor: '#f97316', color: '#ffffff', fontWeight: 'bold', fontSize: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {user.name[0]}
@@ -390,40 +779,160 @@ export default function App() {
                 <div>
                   <h3 style={{ fontWeight: '900', color: '#0f172a', fontSize: '15px' }}>{user.name}</h3>
                   <p style={{ fontSize: '11px', color: '#64748b' }}>{user.email}</p>
+                  <p style={{ fontSize: '10px', color: '#94a3b8' }}>{user.phone}</p>
                 </div>
               </div>
             </div>
 
-            <h3 style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '10px' }}>My Active Listings</h3>
+            {/* Admin Switch Link */}
+            <button 
+              onClick={() => setCurrentScreen('admin')}
+              style={{ backgroundColor: '#0f172a', color: '#ffffff', border: 'none', padding: '12px', borderRadius: '14px', fontWeight: 'bold', fontSize: '12px', marginBottom: '20px', cursor: 'pointer' }}
+            >
+              👑 Switch to Admin Approval Dashboard
+            </button>
+
+            <h3 style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '10px' }}>My Listings</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
-              {ads.slice(0, 2).map(ad => (
-                <div key={ad.id} style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid #ffedd5' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <img src={ad.image} alt={ad.title} style={{ width: '45px', height: '45px', borderRadius: '10px', objectFit: 'cover' }} />
-                    <div>
-                      <h4 style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '13px' }}>${ad.price} | {ad.title}</h4>
-                      <p style={{ fontSize: '10px', color: '#94a3b8' }}>{ad.location}</p>
+              {ads.map(ad => (
+                <div key={ad.id} style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '14px', border: '1px solid #ffedd5' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <img src={ad.image} alt={ad.title} style={{ width: '45px', height: '45px', borderRadius: '10px', objectFit: 'cover' }} />
+                      <div>
+                        <h4 style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '13px' }}>₹{ad.price} | {ad.title}</h4>
+                        <p style={{ fontSize: '10px', color: '#f97316', fontWeight: 'bold' }}>{getTimeRemaining(ad.expiryTime)} • {ad.views} Views</p>
+                      </div>
                     </div>
+                    <button onClick={() => setAds(ads.filter(a => a.id !== ad.id))} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
+                      <Trash2 size={16} />
+                    </button>
                   </div>
-                  <button onClick={() => setAds(ads.filter(a => a.id !== ad.id))} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
-                    <Trash2 size={16} />
+
+                  <button 
+                    onClick={() => setPaymentModal(ad)}
+                    style={{ width: '100%', backgroundColor: '#ffedd5', color: '#c2410c', border: 'none', padding: '6px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', marginTop: '8px', cursor: 'pointer' }}
+                  >
+                    Extend Validity (₹199 / Week)
                   </button>
                 </div>
               ))}
             </div>
 
             <button 
-              onClick={() => setCurrentScreen('welcome')}
+              onClick={handleLogout}
               style={{ width: '100%', backgroundColor: '#ffffff', color: '#ef4444', border: '1px solid #fecaca', padding: '14px', borderRadius: '16px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', marginTop: 'auto' }}
             >
-              Logout
+              Logout / Switch Account
             </button>
           </div>
         )}
 
+        {/* PAYTM QR PAYMENT MODAL */}
+        {paymentModal && (
+          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+            <div style={{ backgroundColor: '#ffffff', width: '100%', borderRadius: '24px', padding: '20px', textAlign: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: '900', color: '#0f172a' }}>Renew Ad (₹199 / Week)</h3>
+                <button onClick={() => setPaymentModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+              </div>
+
+              {/* Paytm QR Code Mockup */}
+              <div style={{ backgroundColor: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '16px', padding: '16px', marginBottom: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <QrCode size={120} className="text-slate-800" />
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#0284c7', marginTop: '8px' }}>Scan with Paytm / Google Pay / PhonePe</span>
+                <span style={{ fontSize: '10px', color: '#64748b' }}>UPI ID: paytmqr.hnchub@paytm</span>
+              </div>
+
+              <form onSubmit={handlePaymentSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <input 
+                  type="text" 
+                  placeholder="Enter Paytm Txn ID / UTR No." 
+                  value={txnId}
+                  onChange={(e) => setTxnId(e.target.value)}
+                  style={{ width: '100%', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', padding: '10px', borderRadius: '12px', fontSize: '13px', outline: 'none' }}
+                  required
+                />
+                <button 
+                  type="submit"
+                  style={{ width: '100%', backgroundColor: '#0284c7', color: '#ffffff', padding: '12px', borderRadius: '14px', fontWeight: 'bold', fontSize: '13px', border: 'none', cursor: 'pointer' }}
+                >
+                  Submit Payment for Admin Approval
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* MAKE AN OFFER MODAL */}
+        {offerModal && (
+          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+            <div style={{ backgroundColor: '#ffffff', width: '100%', borderRadius: '24px', padding: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: '900', color: '#0f172a' }}>Make an Offer</h3>
+                <button onClick={() => setOfferModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+              </div>
+
+              <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>
+                Seller Price: <strong>₹{Number(offerModal.price).toLocaleString()}</strong>
+              </p>
+
+              <form onSubmit={handleSendOffer} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px' }}>Your Offer Price (₹)</label>
+                  <input 
+                    type="number" 
+                    placeholder="e.g. 13000" 
+                    value={offeredPrice}
+                    onChange={(e) => setOfferedPrice(e.target.value)}
+                    style={{ width: '100%', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', padding: '12px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold', outline: 'none' }}
+                    required
+                  />
+                </div>
+
+                <button 
+                  type="submit"
+                  style={{ width: '100%', backgroundColor: '#f97316', color: '#ffffff', padding: '14px', borderRadius: '14px', fontWeight: 'bold', fontSize: '13px', border: 'none', cursor: 'pointer' }}
+                >
+                  Send Price Offer to Seller
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* GPS LOCATION MODAL */}
+        {locationModal && (
+          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+            <div style={{ backgroundColor: '#ffffff', width: '100%', borderRadius: '24px', padding: '20px', textAlign: 'center' }}>
+              <div style={{ width: '50px', height: '50px', backgroundColor: '#ffedd5', color: '#f97316', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px auto' }}>
+                <Navigation size={24} />
+              </div>
+              <h3 style={{ fontSize: '16px', fontWeight: '900', color: '#0f172a' }}>Location Settings</h3>
+              <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', marginBottom: '16px' }}>Current: <strong>{currentLocation}</strong></p>
+
+              <button 
+                onClick={fetchGPSLocation}
+                disabled={isLocating}
+                style={{ width: '100%', backgroundColor: '#f97316', color: '#ffffff', padding: '12px', borderRadius: '14px', fontWeight: 'bold', fontSize: '13px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}
+              >
+                <RefreshCw size={14} className={isLocating ? "animate-spin" : ""} />
+                {isLocating ? 'Detecting GPS...' : 'Auto-Detect My Location'}
+              </button>
+
+              <button 
+                onClick={() => setLocationModal(false)}
+                style={{ width: '100%', backgroundColor: '#f1f5f9', color: '#64748b', padding: '12px', borderRadius: '14px', fontWeight: 'bold', fontSize: '13px', border: 'none', cursor: 'pointer' }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* BOTTOM NAVIGATION */}
-        {currentScreen !== 'welcome' && currentScreen !== 'detail' && (
-          <nav style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#ffffff', borderTop: '1px solid #ffedd5', display: 'flex', justifyContent: 'around', alignItems: 'center', height: '65px', padding: '0 10px', zIndex: 40 }}>
+        {currentScreen !== 'detail' && (
+          <nav style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#ffffff', borderTop: '1px solid #ffedd5', display: 'flex', justifyContent: 'space-around', alignItems: 'center', height: '65px', padding: '0 10px', zIndex: 40 }}>
             <button onClick={() => setCurrentScreen('home')} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: currentScreen === 'home' ? '#f97316' : '#94a3b8', cursor: 'pointer', flex: 1 }}>
               <Home size={20} />
               <span style={{ fontSize: '10px', fontWeight: currentScreen === 'home' ? 'bold' : 'normal' }}>Home</span>
@@ -446,57 +955,6 @@ export default function App() {
               <span style={{ fontSize: '10px', fontWeight: currentScreen === 'profile' ? 'bold' : 'normal' }}>Account</span>
             </button>
           </nav>
-        )}
-
-        {/* AUTH MODAL */}
-        {authModal && (
-          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-            <div style={{ backgroundColor: '#ffffff', width: '100%', borderTopLeftRadius: '30px', borderTopRightRadius: '30px', padding: '24px', position: 'relative' }}>
-              <button onClick={() => setAuthModal(null)} style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
-                <X size={20} />
-              </button>
-
-              <h2 style={{ fontSize: '18px', fontWeight: '900', color: '#0f172a', marginBottom: '4px' }}>
-                {authModal === 'login' ? 'Sign In to HNC Hub' : 'Create an Account'}
-              </h2>
-              <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '20px' }}>Enter your credentials to continue</p>
-
-              <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {authModal === 'signup' && (
-                  <input 
-                    type="text" 
-                    placeholder="Full Name"
-                    value={authForm.name}
-                    onChange={(e) => setAuthForm({...authForm, name: e.target.value})}
-                    style={{ width: '100%', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '14px', fontSize: '13px', outline: 'none' }}
-                    required
-                  />
-                )}
-                <input 
-                  type="email" 
-                  placeholder="Email Address"
-                  value={authForm.email}
-                  onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
-                  style={{ width: '100%', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '14px', fontSize: '13px', outline: 'none' }}
-                  required
-                />
-                <input 
-                  type="password" 
-                  placeholder="Password"
-                  value={authForm.password}
-                  onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
-                  style={{ width: '100%', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '14px', fontSize: '13px', outline: 'none' }}
-                  required
-                />
-                <button 
-                  type="submit"
-                  style={{ width: '100%', backgroundColor: '#f97316', color: '#ffffff', padding: '14px', borderRadius: '14px', fontWeight: 'bold', fontSize: '14px', border: 'none', cursor: 'pointer', marginTop: '10px' }}
-                >
-                  {authModal === 'login' ? 'Sign In' : 'Sign Up'}
-                </button>
-              </form>
-            </div>
-          </div>
         )}
 
       </div>
